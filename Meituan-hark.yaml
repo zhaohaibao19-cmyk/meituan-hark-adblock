@@ -1,0 +1,43 @@
+name: "美团去广告（开屏与定向素材）"
+description: "适配美团外卖已知开屏接口，并拦截少量公开规则标记的广告素材路径。需开启 MITM 并信任证书；并非覆盖所有信息流广告，且未在实际设备上验证。"
+author: "Hark 原生规则适配；参考 blackmatrix7、ihxperfect 与 shui1iao/Fly 公开规则"
+icon: cart
+
+# API 来源：
+# https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rewrite/Surge/Advertising/Advertising.sgmodule
+# https://raw.githubusercontent.com/shui1iao/Fly/main/%E5%8E%BB%E5%B9%BF%E5%91%8A.sgmodule
+# https://raw.githubusercontent.com/ihxperfect/loon-plugin/main/AdBlock.plugin
+# 响应字段来源：https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/script/startup/startup.js
+# 图片目录误伤提醒：https://github.com/blackmatrix7/ios_rule_script/issues/762
+# Hark 响应改写语法参考：https://raw.githubusercontent.com/zhaohantao1360-hash/Hark/main/JD-hark.yaml
+
+url_rewrites:
+  # 精确匹配已知开屏配置接口；loadInfo 由下方 response_jq 改写，不在此处直接阻断。
+  - match: "^https?:\\/\\/wmapi\\.meituan\\.com\\/api\\/v\\d+\\/openscreen\\?ad"
+    location: "http://reject-dict/"
+  - match: "^https?:\\/\\/wmapi\\.meituan\\.com\\/api\\/v\\d+\\/startpicture"
+    location: "http://reject-dict/"
+  - match: "^https?:\\/\\/www\\.meituan\\.com\\/api\\/v\\d+\\/appstatus\\?ad"
+    location: "http://reject-dict/"
+
+  # 只拦截明确标记为广告的素材目录；bizad 仅匹配公开规则中的特定文件名，不封锁整个目录。
+  - match: "^https?:\\/\\/img\\.meituan\\.net\\/(adunion|display|dpmobile|midas)\\/\\w+\\.(gif|jpg|jpg\\.webp)(\\?.*)?$"
+    location: "http://reject-200/"
+  - match: "^https?:\\/\\/img\\.meituan\\.net\\/bizad\\/bizad_brandCpt_\\d+\\.jpg(\\?.*)?$"
+    location: "http://reject-200/"
+  - match: "^https?:\\/\\/(s3plus|flowplus)\\.meituan\\.net\\/v\\d+\\/\\w+\\/linglong\\/\\w+\\.(gif|jpg|mp4)"
+    location: "http://reject-200/"
+
+body_rewrites:
+  # 按已知 JSON 结构清空 startpicture.ad / startpicture.mk；遇到未知响应结构时保持原样。
+  - response_jq:
+      match: "^https?:\\/\\/wmapi\\.meituan\\.com\\/api\\/v\\d+\\/loadInfo\\?"
+      filter: 'if (.data | type) == "object" then if (.data.startpicture | type) == "object" then (if (.data.startpicture | has("ad")) then .data.startpicture.ad = [] else . end) | (if (.data.startpicture | type) == "object" and (.data.startpicture | has("mk")) then .data.startpicture.mk = [] else . end) else . end else . end'
+
+mitm:
+  hostnames:
+    - wmapi.meituan.com
+    - www.meituan.com
+    - img.meituan.net
+    - s3plus.meituan.net
+    - flowplus.meituan.net
